@@ -7,7 +7,7 @@ namespace Radzinsky.Application.Commands;
 
 public class SurveyCommand : ICommand, ICallbackQueryHandler
 {
-    private record SurveyState(long RespondentUserId, int? MatrixCellId, int? Rating);
+    private record SurveyState(int? MatrixCellId, int? Rating);
     
     private readonly IStateService _states;
 
@@ -36,7 +36,7 @@ public class SurveyCommand : ICommand, ICallbackQueryHandler
             return;
         }
         
-        var state = new SurveyState(respondentUserId, null, null);
+        var state = new SurveyState(null, null);
         _states.WriteState(stateKey, state);
             
         await context.ReplyAsync("Ok! Now answer some questions for the survey.");
@@ -69,7 +69,7 @@ public class SurveyCommand : ICommand, ICallbackQueryHandler
     private async Task HandleMatrixCellCallbackAsync(CallbackQueryContext context)
     {
         DeconstructCallbackData(context.Query.Data.Payload,
-            out var respondentUserId, out var callbackKey, out var payload);
+            out var respondentUserId, out _, out var payload);
 
         if (respondentUserId != context.Update.InteractorUserId!.Value)
         {
@@ -114,7 +114,7 @@ public class SurveyCommand : ICommand, ICallbackQueryHandler
     private async Task HandleRatingCallbackAsync(CallbackQueryContext context)
     {
         DeconstructCallbackData(context.Query.Data.Payload,
-            out var respondentUserId, out var callbackKey, out var payload);
+            out var respondentUserId, out _, out var payload);
 
         if (respondentUserId != context.Update.InteractorUserId!.Value)
         {
@@ -142,7 +142,11 @@ public class SurveyCommand : ICommand, ICallbackQueryHandler
         await context.ReplyAsync(string.Format(replyTemplate, state.MatrixCellId, state.Rating));
     }
 
-    private void DeconstructCallbackData(string data, out long respondentUserId, out string callbackKey, out string payload)
+    private void DeconstructCallbackData(
+        string data,
+        out long respondentUserId,
+        out string callbackKey,
+        out string payload)
     {
         var words = data.Split();
         respondentUserId = long.Parse(words[0]);
