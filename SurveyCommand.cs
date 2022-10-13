@@ -68,44 +68,76 @@ public class SurveyCommand : ICommand, ICallbackQueryHandler
 
     private async Task HandleMatrixCellCallbackAsync(CallbackQueryContext context)
     {
-        var matrixCellId = int.Parse(context.Query.Data.Payload.Split().Last());
-        var stateKey = GetSurveyStateKey(context.Update.InteractorUserId!.Value);
-        _states.WriteState<SurveyState>(stateKey, state => state! with { MatrixCellId = matrixCellId });
+        DeconstructCallbackData(context.Query.Data.Payload,
+            out var respondentUserId, out var callbackKey, out var payload);
 
-        await AskForRatingAsync(context);
+        if (respondentUserId != context.Update.InteractorUserId!.Value)
+        {
+            await context.ReplyAsync("This survey is not for you!");
+            return;
+        }
+        
+        var stateKey = GetSurveyStateKey(respondentUserId);
+        var state = _states.ReadState<SurveyState>(stateKey)!;
+
+        if (state.MatrixCellId is not null)
+        {
+            await context.ReplyAsync("You've already decided on your matrix cell!");
+            return;
+        }
+        
+        _states.WriteState(stateKey, state with { MatrixCellId = int.Parse(payload) });
+        
+        await AskForRatingAsync(context, respondentUserId);
     }
 
-    private async Task AskForRatingAsync(CallbackQueryContext context)
+    private async Task AskForRatingAsync(CallbackQueryContext context, long respondentUserId)
     {
-        var buttons = new[]
+        var buttons = new List<List<InlineKeyboardButton>>
         {
-            new[]
+            new()
             {
-                InlineKeyboardButton.WithCallbackData("*", "state1 Rating 1"),
-                InlineKeyboardButton.WithCallbackData("**", "state1 Rating 2"),
-                InlineKeyboardButton.WithCallbackData("***", "state1 Rating 3"),
-                InlineKeyboardButton.WithCallbackData("****", "state1 Rating 4"),
-                InlineKeyboardButton.WithCallbackData("*****", "state1 Rating 5")
+                InlineKeyboardButton.WithCallbackData("*", "1"),
+                InlineKeyboardButton.WithCallbackData("**", "2"),
+                InlineKeyboardButton.WithCallbackData("***", "3"),
+                InlineKeyboardButton.WithCallbackData("****", "4"),
+                InlineKeyboardButton.WithCallbackData("*****", "5")
             }
         };
+        
+        buttons.ForEach(x => x.ForEach(button =>
+            button.CallbackData = $"{respondentUserId} Rating {button.CallbackData}"));
 
         await context.ReplyAsync("2. Rate us 1 to 5.", replyMarkup: new InlineKeyboardMarkup(buttons));
     }
     
     private async Task HandleRatingCallbackAsync(CallbackQueryContext context)
     {
-        var stateKey = GetSurveyStateKey(context.Update.InteractorUserId!.Value);
-        var rating = int.Parse(context.Query.Data.Payload.Split().Last());
-        _states.WriteState<SurveyState>(stateKey, state => state! with { Rating = rating });
+        DeconstructCallbackData(context.Query.Data.Payload,
+            out var respondentUserId, out var callbackKey, out var payload);
 
-        await ShowResultsAsync(context);
+        if (respondentUserId != context.Update.InteractorUserId!.Value)
+        {
+            await context.ReplyAsync("This survey is not for you!");
+            return;
+        }
+        
+        var stateKey = GetSurveyStateKey(respondentUserId);
+        var state = _states.ReadState<SurveyState>(stateKey)!;
+
+        if (state.Rating is not null)
+        {
+            await context.ReplyAsync("You've already decided on rating!");
+            return;
+        }
+        
+        _states.WriteState(stateKey, state with { Rating = int.Parse(payload) });
+
+        await ShowResultsAsync(context, state);
     }
     
-    private async Task ShowResultsAsync(CallbackQueryContext context)
+    private async Task ShowResultsAsync(CallbackQueryContext context, SurveyState state)
     {
-        var stateKey = GetSurveyStateKey(context.Update.InteractorUserId!.Value);
-        var state = _states.ReadState<SurveyState>(stateKey)!;
-        
         const string replyTemplate = "Thanks for your time! You've just chosen cell {0} and rated us for {1}.";
         await context.ReplyAsync(string.Format(replyTemplate, state.MatrixCellId, state.Rating));
     }
