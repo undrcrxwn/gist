@@ -15,7 +15,16 @@ public class SurveyCommand : ICommand, ICallbackQueryHandler
 
     public async Task HandleCallbackQueryAsync(CallbackQueryContext context, CancellationToken token)
     {
-        CallbackQueryContextHandler callbackQueryHandler = context.Query.Data.Payload.Split().First() switch
+        DeconstructCallbackData(context.Query.Data.Payload,
+            out var respondentUserId, out var callbackKey, out _);
+        
+        if (respondentUserId != context.Update.InteractorUserId!.Value)
+        {
+            await context.ReplyAsync("This survey is not for you!");
+            return;
+        }
+
+        CallbackQueryContextHandler callbackQueryHandler = callbackKey switch
         {
             "Cell" => HandleMatrixCellCallbackAsync,
             "Rating" => HandleRatingCallbackAsync,
@@ -71,12 +80,6 @@ public class SurveyCommand : ICommand, ICallbackQueryHandler
         DeconstructCallbackData(context.Query.Data.Payload,
             out var respondentUserId, out _, out var payload);
 
-        if (respondentUserId != context.Update.InteractorUserId!.Value)
-        {
-            await context.ReplyAsync("This survey is not for you!");
-            return;
-        }
-        
         var stateKey = GetSurveyStateKey(respondentUserId);
         var state = _states.ReadState<SurveyState>(stateKey)!;
 
@@ -116,12 +119,6 @@ public class SurveyCommand : ICommand, ICallbackQueryHandler
         DeconstructCallbackData(context.Query.Data.Payload,
             out var respondentUserId, out _, out var payload);
 
-        if (respondentUserId != context.Update.InteractorUserId!.Value)
-        {
-            await context.ReplyAsync("This survey is not for you!");
-            return;
-        }
-        
         var stateKey = GetSurveyStateKey(respondentUserId);
         var state = _states.ReadState<SurveyState>(stateKey)!;
 
